@@ -15,21 +15,6 @@ jobs:
       matrix:
         include:
         # Device list
-          - model: "SM-S911N" # Galaxy S23
-            csc: "KOO"
-            omc: "OKR"
-            imei: "354619982280934"
-          
-          - model: "SM-S916N" #Galaxy S23+
-            csc: "KOO"
-            omc: "OKR"
-            imei: "355468150850816"
-
-          - model: "SM-S918N" # Galaxy S23 Ultra
-            csc: "KOO"
-            omc: "OKR"
-            imei: "353992851826496"
-
           - model: "SM-S921N" # Galaxy S24
             csc: "KOO"
             omc: "OKR"
@@ -49,16 +34,6 @@ jobs:
             csc: "KOO"
             omc: "OKR"
             imei: "351917372803445"
-
-          - model: "SM-F731N" # Galaxy Z Flip5
-            csc: "KOO"
-            omc: "OKR"
-            imei: "355755471923094"
-            
-          - model: "SM-F946N" # Galaxy Z Fold5
-            csc: "KOO"
-            omc: "OKR"
-            imei: "352926710903022"
         # End
    
     steps:
