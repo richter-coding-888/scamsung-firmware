@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        # Device list
+        # Device list   
           - model: "SM-S921N" # Galaxy S24
             csc: "KOO"
             omc: "OKR"
@@ -42,65 +42,36 @@ jobs:
         with:
           submodules: true
 
-      - name: Compare latest version with current version
-        shell: bash
-        run: |
-          set +e
-          need_update=0
-          model="${{ matrix.model }}"
-          csc="${{ matrix.csc }}"
-          omc="${{ matrix.omc }}"
-          cur_file="current.${model}_${csc}_${omc}"
-
-          # Try https first, then fall back to http
-          xml=""
-          for proto in https http; do
-            xml="$(curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 20 \
-              -A 'Kies2.0' \
-              "${proto}://fota-cloud-dn.ospserver.net/firmware/${csc}/${model}/version.xml")"
-            [[ -n "$xml" ]] && break
-            echo "::warning::Fetch via ${proto} failed or empty"
-          done
-
-          echo "----- version.xml -----"
-          echo "$xml"
-          echo "-----------------------"
-
-          if [[ -z "$xml" ]]; then
-            echo "::error::Cannot fetch version.xml for ${model}/${csc}"
-            exit 1
-          fi
-
-          # Extract the value inside <latest ...>...</latest>
-          latest="$(echo "$xml" | tr -d '\r\n' \
-            | sed -n 's:.*<latest[^>]*>\([^<]*\)</latest>.*:\1:p')"
-
-          if [[ -z "$latest" ]]; then
-            echo "::error::Could not parse <latest> from version.xml"
-            exit 1
-          fi
-
-          latest_short="$(echo "$latest" | cut -d'/' -f1)"
-          latest_csc="$(echo "$latest" | cut -d'/' -f2)"
-          current="$(cat "$cur_file" 2>/dev/null | tr -d '\r\n')"
-
-          echo "latest  = [$latest]"
-          echo "current = [$current]"
-
-          if [[ "$latest" != "$current" ]]; then
-            need_update=1
-            echo "=> Update needed"
-          else
-            echo "=> Already up to date"
-          fi
-
-          {
-            echo "latest_version=$latest"
-            echo "latest_shortversion=$latest_short"
-            echo "latest_cscversion=$latest_csc"
-            echo "need_update=$need_update"
-          } >> "$GITHUB_ENV"
-          exit 0
+#      - name: Compare latest version with current version
+#        run: |
+#          set -o pipefail
+#          need_update=0
+#
+#          latest="$(curl --fail --retry 5 --retry-delay 5 --silent \
+#            "https://fota-cloud-dn.ospserver.net/firmware/${{ matrix.csc }}/${{ matrix.model }}/version.xml" \
+#            | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//')"
+#
+#          if [[ -z "$latest" ]]; then
+#            echo "::error::Could not fetch latest version for ${{ matrix.model }}/${{ matrix.csc }}"
+#            exit 1
+#          fi
+#
+#          latest_short="$(echo "$latest" | cut -d'/' -f1)"
+#          latest_csc="$(echo "$latest" | cut -d'/' -f2)"
+#          current="$(cat "current.${{ matrix.model }}_${{ matrix.csc }}_${{ matrix.omc }}" 2>/dev/null || true)"
+#
+#          if [[ "$latest" != "$current" ]]; then
+#            need_update=1
+#          fi
+#
+#          echo "Latest: $latest | Current: ${current:-none} | need_update=$need_update"
+#
+#          {
+#            echo "latest_version=$latest"
+#            echo "latest_shortversion=$latest_short"
+#            echo "latest_cscversion=$latest_csc"
+#            echo "need_update=$need_update"
+#          } >> "$GITHUB_ENV"
 
       - name: Free up workflow space
         if: env.need_update == 1
