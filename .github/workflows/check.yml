@@ -25,7 +25,7 @@ jobs:
             omc: "OKR"
             imei: "352926710903022"
         # End
-   
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
@@ -46,11 +46,12 @@ jobs:
           echo "need_update=$need_update" >> $GITHUB_ENV
 
       - name: Free up workflow space
+        if: env.need_update == 1
         run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
+          curl -fL -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
           chmod +x util_free_space.sh
           ./util_free_space.sh
-
+          rm -f util_free_space.sh
 
       - name: Install dependencies
         if: env.need_update == 1
@@ -70,24 +71,30 @@ jobs:
         if: env.need_update == 1
         run: |
           source py_env/bin/activate
-          mkdir "${{ matrix.model }}_${{ matrix.csc }}"
+          FW_DIR="${{ matrix.model }}_${{ matrix.csc }}"
+          mkdir -p "$FW_DIR"
+
           # https://github.com/ExtremeXT/ExtremeROM/blob/v2.6.1/scripts/download_fw.sh#L169-L192
           C=1
           while true; do
-              samloader -m ${{ matrix.model }} -r ${{ matrix.csc }} -i ${{ matrix.imei }} download -O "${{ matrix.model }}_${{ matrix.csc }}" || true
-              ZIP_FILE="$(find "${{ matrix.model }}_${{ matrix.csc }}" -name "*.zip" | sort -r | head -n 1)"
-              if [[ ! "$ZIP_FILE" ]] || [[ ! -f "$ZIP_FILE" ]]; then
+              # Show the last lines of samloader output so failures are visible
+              samloader -m ${{ matrix.model }} -r ${{ matrix.csc }} -i ${{ matrix.imei }} download -O "$FW_DIR" 2>&1 | tail -n 20 || true
+              ZIP_FILE="$(find "$FW_DIR" -name "*.zip" | sort -r | head -n 1)"
+              if [[ -z "$ZIP_FILE" ]] || [[ ! -f "$ZIP_FILE" ]]; then
                   if [[ "$C" -gt 10 ]]; then
+                      echo "::error::Firmware download failed after 10 attempts"
                       exit 1
                   fi
-                  echo -e "[Attempt: $C] Download failed, retrying in 5 seconds..."
+                  echo "[Attempt: $C] Download failed, retrying in 5 seconds..."
                   sleep 5
-                  ((C++))
+                  C=$((C + 1))
               else
                   break
               fi
           done
-          unzip -q "$ZIP_FILE" -d "${{ matrix.model }}_${{ matrix.csc }}/extracted"
+
+          # unzip returns 1 for harmless warnings; only fail on real errors
+          unzip -qo "$ZIP_FILE" -d "$FW_DIR/extracted" || [ $? -eq 1 ]
           rm -f "$ZIP_FILE"
           deactivate
           rm -rf py_env
@@ -95,9 +102,12 @@ jobs:
       - name: Get path of files
         if: env.need_update == 1
         run: |
-          ap_tar="$(find . -type f -name 'AP*' -print -quit)"
-          bl_tar="$(find . -type f -name 'BL*' -print -quit)"
-          [[ -n "$ap_tar" ]] || { echo "AP archive not found"; exit 1; }
+          FW_DIR="${{ matrix.model }}_${{ matrix.csc }}/extracted"
+          ap_tar="$(find "$FW_DIR" -type f -name 'AP*' -print -quit)"
+          bl_tar="$(find "$FW_DIR" -type f -name 'BL*' -print -quit)"
+          [[ -n "$ap_tar" ]] || { echo "::error::AP archive not found"; ls -la "$FW_DIR"; exit 1; }
+          echo "AP: $ap_tar"
+          echo "BL: ${bl_tar:-none}"
           echo "ap_tar=$ap_tar" >> "$GITHUB_ENV"
           echo "bl_tar=$bl_tar" >> "$GITHUB_ENV"
 
@@ -105,7 +115,18 @@ jobs:
         if: env.need_update == 1
         run: |
           version_short="$(basename "${{ env.ap_tar }}" | cut -d'_' -f3)"
-          [[ "$version_short" == "${{ env.latest_shortversion }}" ]]
+          echo "Downloaded: $version_short | Expected: ${{ env.latest_shortversion }}"
+
+          if [[ -z "$version_short" ]]; then
+            echo "::error::Could not parse version from AP filename"
+            exit 1
+          fi
+
+          if [[ "$version_short" != "${{ env.latest_shortversion }}" ]]; then
+            echo "::warning::Version mismatch. Using downloaded version $version_short"
+            echo "latest_shortversion=$version_short" >> "$GITHUB_ENV"
+          fi
+
           echo "PDA version: $version_short" > versions.txt
 
       - name: Extract release images
@@ -116,10 +137,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # NOTE: no early "exit" in awk. With pipefail, exiting early makes
+          # tar die with SIGPIPE (141) and the whole script fails.
           archive_member() {
             local archive="$1"
             local wanted="$2"
-            tar -tf "$archive" | awk -v wanted="$wanted" '$0 == wanted || $0 ~ ("/" wanted "$") { print; exit }'
+            tar -tf "$archive" | awk -v wanted="$wanted" \
+              '!found && ($0 == wanted || $0 ~ ("/" wanted "$")) { print; found=1 }'
           }
 
           extract_image_from_archive() {
@@ -170,17 +194,18 @@ jobs:
           AP_TAR: ${{ env.ap_tar }}
         run: |
           set -euo pipefail
+          chmod +x ./tools/lpunpack || true
 
           archive_member() {
             local wanted="$1"
-            tar -tf "$AP_TAR" | awk -v wanted="$wanted" '$0 == wanted || $0 ~ ("/" wanted "$") { print; exit }'
+            tar -tf "$AP_TAR" | awk -v wanted="$wanted" \
+              '!found && ($0 == wanted || $0 ~ ("/" wanted "$")) { print; found=1 }'
           }
 
           super_member="$(archive_member super.img.lz4)"
           if [[ -n "$super_member" ]]; then
             tar -xOf "$AP_TAR" "$super_member" > super.img.lz4
-            # Match the original workflow: AP is no longer needed after
-            # super.img.lz4 has been copied, and keeping it wastes runner disk.
+            # AP is no longer needed once super.img.lz4 is copied; free disk.
             rm -f "$AP_TAR"
             lz4 -d super.img.lz4 super.img
             rm -f super.img.lz4
@@ -191,24 +216,16 @@ jobs:
               rm -f super.raw.img
             fi
 
-            # system, vendor, vendor_dlkm, and system_dlkm are all logical
-            # partitions stored in super.img. Extract each one from super.
-            for partition in system vendor; do
-              rm -f "${partition}.img"
-              if ! ./tools/lpunpack -p "$partition" super.img .; then
-                echo "::warning::${partition}.img was not found in super.img"
-              fi
-            done
-
-            # vendor_dlkm and system_dlkm are EROFS logical partitions.
-            # Preserve the extracted images without sparse conversion.
-            for partition in vendor_dlkm system_dlkm; do
+            # All of these are logical partitions stored in super.img.
+            for partition in system vendor vendor_dlkm system_dlkm; do
               rm -f "${partition}.img"
               if ! ./tools/lpunpack -p "$partition" super.img .; then
                 echo "::warning::${partition}.img was not found in super.img"
               fi
             done
             rm -f super.img
+          else
+            echo "::warning::super.img.lz4 not found in AP archive"
           fi
 
           normalize_sparse() {
@@ -279,18 +296,21 @@ jobs:
             ${{ env.latest_shortversion }}_system.*
             ${{ env.latest_shortversion }}_vendor.*
 
-      - name: Update current version
+      - name: Update current version and push
         if: env.need_update == 1
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git pull origin "${GITHUB_REF_NAME}" --ff-only
+
           printf '%s\n' "${{ env.latest_version }}" > "current.${{ matrix.model }}_${{ matrix.csc }}_${{ matrix.omc }}"
           git add "current.${{ matrix.model }}_${{ matrix.csc }}_${{ matrix.omc }}"
           git commit -m "${{ matrix.model }}: ${{ env.latest_shortversion }}"
 
-      - name: Push changes to repo
-        if: env.need_update == 1
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Matrix jobs push in parallel; rebase and retry on conflicts.
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "Push attempt $i failed, retrying..."
+            sleep $((i * 3))
+          done
+          echo "::error::Could not push version file"
+          exit 1
