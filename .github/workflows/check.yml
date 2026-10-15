@@ -2,9 +2,6 @@ name: Check firmware update
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 12 * * *"
-  push:
 
 permissions:
   contents: write
@@ -16,40 +13,54 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:          
-          - model: "SM-F731N"
+        include:
+        # Device list
+          - model: "SM-S911N" # Galaxy S23
             csc: "KOO"
             omc: "OKR"
-            imei: "350186701234562"
-          - model: "SM-F946N"
+            imei: "354619982280934"
+          
+          - model: "SM-S916N" #Galaxy S23+
             csc: "KOO"
             omc: "OKR"
-            imei: "350443701234567"
-          - model: "SM-S911N"
-            csc: "KOO"
-            omc: "OKR"
-            imei: "351357511234568"
-          - model: "SM-S916N"
-            csc: "KOO"
-            omc: "OKR"
-            imei: "350309331234568"
-          - model: "SM-S918N"
-            csc: "KOO"
-            omc: "OKR"
-            imei: "351747951234567"
-          - model: "SM-X716B"
-            csc: "EUX"
-            omc: "OXM"
-            imei: "353439961234567"
-          - model: "SM-X816B"
-            csc: "EUX"
-            omc: "OXM"
-            imei: "350635071234560"
-          - model: "SM-X916B"
-            csc: "EUX"
-            omc: "OXM"
-            imei: "350836530109688"
+            imei: "355468150850816"
 
+          - model: "SM-S918N" # Galaxy S23 Ultra
+            csc: "KOO"
+            omc: "OKR"
+            imei: "353992851826496"
+
+          - model: "SM-S921N" # Galaxy S24
+            csc: "KOO"
+            omc: "OKR"
+            imei: "350493702899090"
+
+          - model: "SM-S926N" # Galaxy S24+
+            csc: "KOO"
+            omc: "OKR"
+            imei: "350850260834266"
+
+          - model: "SM-S928N" # Galaxy S24 Ultra
+            csc: "KOO"
+            omc: "OKR"
+            imei: "350513042022994"
+
+          - model: "SM-S721N" # Galaxy S24 FE
+            csc: "KOO"
+            omc: "OKR"
+            imei: "351917372803445"
+
+          - model: "SM-F731N" # Galaxy Z Flip5
+            csc: "KOO"
+            omc: "OKR"
+            imei: "355755471923094"
+            
+          - model: "SM-F946N" # Galaxy Z Fold5
+            csc: "KOO"
+            omc: "OKR"
+            imei: "352926710903022"
+        # End
+   
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
