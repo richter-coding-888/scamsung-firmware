@@ -29,36 +29,6 @@ jobs:
             csc: "KOO"
             omc: "OKR"
             imei: "353992851826496"
-
-          - model: "SM-S921N" # Galaxy S24
-            csc: "KOO"
-            omc: "OKR"
-            imei: "350493702899090"
-
-          - model: "SM-S926N" # Galaxy S24+
-            csc: "KOO"
-            omc: "OKR"
-            imei: "350850260834266"
-
-          - model: "SM-S928N" # Galaxy S24 Ultra
-            csc: "KOO"
-            omc: "OKR"
-            imei: "350513042022994"
-
-          - model: "SM-S721N" # Galaxy S24 FE
-            csc: "KOO"
-            omc: "OKR"
-            imei: "351917372803445"
-
-          - model: "SM-F731N" # Galaxy Z Flip5
-            csc: "KOO"
-            omc: "OKR"
-            imei: "355755471923094"
-            
-          - model: "SM-F946N" # Galaxy Z Fold5
-            csc: "KOO"
-            omc: "OKR"
-            imei: "352926710903022"
         # End
    
     steps:
