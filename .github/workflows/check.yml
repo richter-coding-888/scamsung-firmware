@@ -37,6 +37,13 @@ jobs:
         # End
 
     steps:
+
+      - name: Force update
+        run: |
+         echo "need_update=1" >> "$GITHUB_ENV"
+         echo "latest_version=TEST/TEST/TEST" >> "$GITHUB_ENV"
+         echo "latest_shortversion=TEST" >> "$GITHUB_ENV"
+      
       - name: Check out
         uses: actions/checkout@v6
 
