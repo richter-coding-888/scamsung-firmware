@@ -37,10 +37,8 @@ jobs:
         # End
 
     steps:
-      - name: Checkout repo
+      - name: Check out
         uses: actions/checkout@v6
-        with:
-          submodules: false
 
 #      - name: Compare latest version with current version
 #        run: |
